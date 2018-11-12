@@ -110,6 +110,18 @@ class Bitmax():
         """Market Trades"""
         return self.public_request('GET', 'trades', symbol=symbol, n=n)
 
+    def get_all_products_24h(self):
+        """24-hour Rolling Statistics of All Products"""
+        return self.public_request('GET', 'ticker/24hr')
+
+    def get_one_products_24h(self, symbol):
+        """24-hour Rolling Statistics of All Products"""
+        return self.public_request('GET', f'ticker/24hr?symbol={symbol}')
+
+    def get_bar_history_info(self):
+        """Bar History Info"""
+        return self.public_request('GET', 'barhist/info')
+
     def get_user_info(self):
         """User Info"""
         return self.signed_request('GET', 'user/info', 'user/info')
