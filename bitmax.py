@@ -49,7 +49,7 @@ class Bitmax():
         self.api_key = api_key
         self.secret = secret
 
-    def public_request(self, method, api_url, **payload):
+    def public_request(self, method, api_url, payload = None):
         """request public url"""
         full_url = self.base_url + self.base_path + api_url
         try:
@@ -104,11 +104,19 @@ class Bitmax():
 
     def get_market_depth(self, symbol, n):
         """Market Depth (Level 2 Order Book Data) of One Product"""
-        return self.public_request('GET', 'depth', symbol=symbol, n=n)
+        params = {
+            "symbol": symbol,
+            "n": n
+        }
+        return self.public_request('GET', 'depth', params)
 
     def get_market_trades(self, symbol, n):
         """Market Trades"""
-        return self.public_request('GET', 'trades', symbol=symbol, n=n)
+        params = {
+            "symbol": symbol,
+            "n": n
+        }
+        return self.public_request('GET', 'trades', params)
 
     def get_all_products_24h(self):
         """24-hour Rolling Statistics of All Products"""
