@@ -1,7 +1,7 @@
 #coding:utf-8
 import time
 from pprint import pprint
-from API.bitmax import *
+from bitmax import *
 
 if __name__ == "__main__":
 
