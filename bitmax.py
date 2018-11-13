@@ -41,19 +41,21 @@ def make_auth_header(timestamp, api_path, api_key, secret, coid=None):
 
 class Bitmax():
 
-    def __init__(self, base_url = 'https://bitmax.io/', base_path = 'api/v1/'):
+    def __init__(self, base_url = 'https://bitmax.io/'):
         self.base_url = base_url
-        self.base_path = base_path
 
     def auth(self, api_key, secret):
         self.api_key = api_key
         self.secret = secret
 
-    def public_request(self, method, api_url, payload = None):
+    def public_request(self, method, base_path, payload = None):
         """request public url"""
-        full_url = self.base_url + self.base_path + api_url
+        full_url = self.base_url + base_path
         try:
-            r = requests.request(method, full_url, params=payload)
+            if method == "GET":
+                r = requests.request(method, full_url, params=payload)
+            else:
+                r = requests.request(method, full_url, json=payload)
             r.raise_for_status()
             if r.status_code == 200:
                 return True, r.json()
@@ -64,18 +66,16 @@ class Bitmax():
         except Exception as err:
             return False, {'error': 'E10002', 'data': err}
 
-    def signed_request(self, method, api_url, api_path, coid = None, account_group = None, **payload):
+    def signed_request(self, method, base_path, api_path, ts, coid = None, payload = None):
         """request a signed url"""
-        if account_group is None:
-            full_url = self.base_url + self.base_path + api_url
-        else:
-            full_url = self.base_url + str(account_group) + '/' + self.base_path + api_url
-        ts = utc_timestamp()
-        #coid = uuid32()
+        full_url = self.base_url + base_path
         headers = make_auth_header(ts, api_path, self.api_key, self.secret, coid)
 
         try:
-            r = requests.request(method, full_url, headers=headers, json=payload)
+            if method == "GET":
+                r = requests.request(method, full_url, headers=headers, params=payload)
+            else:
+                r = requests.request(method, full_url, headers=headers, json=payload)
             r.raise_for_status()
             if r.status_code == 200:
                 return True, r.json()
@@ -88,19 +88,19 @@ class Bitmax():
 
     def get_all_assets(self):
         """List of all assets"""
-        return self.public_request('GET', 'assets')
+        return self.public_request('GET', 'api/v1/assets')
 
     def get_all_products(self):
         """List all products"""
-        return self.public_request('GET', 'products')
+        return self.public_request('GET', 'api/v1/products')
 
     def get_current_fees(self):
         """Get Current Trading Fees"""
-        return self.public_request('GET', 'fees')
+        return self.public_request('GET', 'api/v1/fees')
 
     def get_market_ticker(self, symbol):
         """Market Quote (Level 1 Order Book Data) of One Product"""
-        return self.public_request('GET', f'quote?symbol={symbol}')
+        return self.public_request('GET', f'api/v1/quote?symbol={symbol}')
 
     def get_market_depth(self, symbol, n):
         """Market Depth (Level 2 Order Book Data) of One Product"""
@@ -108,7 +108,7 @@ class Bitmax():
             "symbol": symbol,
             "n": n
         }
-        return self.public_request('GET', 'depth', params)
+        return self.public_request('GET', 'api/v1/depth', params)
 
     def get_market_trades(self, symbol, n):
         """Market Trades"""
@@ -116,29 +116,103 @@ class Bitmax():
             "symbol": symbol,
             "n": n
         }
-        return self.public_request('GET', 'trades', params)
+        return self.public_request('GET', 'api/v1/trades', params)
 
     def get_all_products_24h(self):
         """24-hour Rolling Statistics of All Products"""
-        return self.public_request('GET', 'ticker/24hr')
+        return self.public_request('GET', 'api/v1/ticker/24hr')
 
     def get_one_products_24h(self, symbol):
         """24-hour Rolling Statistics of All Products"""
-        return self.public_request('GET', f'ticker/24hr?symbol={symbol}')
+        return self.public_request('GET', f'api/v1/ticker/24hr?symbol={symbol}')
 
     def get_bar_history_info(self):
         """Bar History Info"""
-        return self.public_request('GET', 'barhist/info')
+        return self.public_request('GET', 'api/v1/barhist/info')
+
+    def get_bar_history_data(self, symbol, start, end, interval):
+        """Bar History Data"""
+        params = {
+            "symbol": symbol,
+            "from": start,
+            "to": end,
+            "interval": interval
+        }
+        return self.public_request('GET', 'api/barhist', params)
 
     def get_user_info(self):
         """User Info"""
-        return self.signed_request('GET', 'user/info', 'user/info')
+        ts = utc_timestamp()
+        return self.signed_request('GET', 'api/v1/user/info', 'user/info', ts)
 
     def get_all_balance(self, account_group):
         """List all Balances"""
-        return self.signed_request('GET', 'balance', 'balance', account_group = account_group)
+        ts = utc_timestamp()
+        return self.signed_request('GET', f'{account_group}/api/v1/balance', 'balance', ts)
 
     def get_one_balance(self, account_group, asset):
         """Get Balance of one Asset"""
-        return self.signed_request('GET', f'balance/{asset}', 'balance', account_group=account_group)
+        ts = utc_timestamp()
+        return self.signed_request('GET', f'{account_group}/api/v1/balance/{asset}', 'balance', ts)
+
+    def creat_new_order(self, account_group, symbol, price, quantity, order_type, side):
+        """Place a New Order"""
+        ts = utc_timestamp()
+        coid = uuid32()
+        params = dict(
+            coid=coid,
+            time=ts,
+            symbol=symbol.replace("-", "/"),
+            orderPrice=str(price),
+            orderQty=str(quantity),
+            orderType=order_type,
+            side=side.lower()
+        )
+        return self.signed_request('POST', f'{account_group}/api/v1/order', 'order', ts, coid=coid, payload=params)
+
+    def cancel_one_order(self, account_group, symbol, orig_coid):
+        """Cancel an Order"""
+        ts = utc_timestamp()
+        coid = uuid32()
+        params = dict(
+            coid=coid,
+            time=ts,
+            symbol=symbol.replace("-", "/"),
+            origCoid = orig_coid
+        )
+        return self.signed_request('DELETE', f'{account_group}/api/v1/order', 'order', ts, coid=coid, payload=params)
+
+    def cancel_all_open_order(self, account_group, symbol = None):
+        """Cancel All Open Orders"""
+        ts = utc_timestamp()
+        if symbol is not None:
+            return self.signed_request('DELETE', f'{account_group}/api/v1/order/all?symbol={symbol.replace("-", "/")}', 'order/all', ts)
+        else:
+            return self.signed_request('DELETE', f'{account_group}/api/v1/order/all', 'order/all', ts)
+
+    def get_all_open_orders(self, account_group):
+        """List of All Open Orders"""
+        ts = utc_timestamp()
+        return self.signed_request('GET', f'{account_group}/api/v1/order/open', 'order/open', ts)
+
+    def get_history_orders(self, account_group, start, end, symbol, n):
+        """List Historical Orders"""
+        ts = utc_timestamp()
+        params = dict(
+            startTime=start,
+            endTime=end,
+            symbol=symbol,
+            n = n
+        )
+        return self.signed_request('GET', f'{account_group}/api/v1/order/history', 'order/history', ts, payload=params)
+
+    def get_one_order(self, account_group, coid):
+        """Get Basic Order Data of One Order"""
+        ts = utc_timestamp()
+        return self.signed_request('GET', f'{account_group}/api/v1/order/{coid}', 'order', ts)
+
+    def get_fills_one_order(self, account_group, coid):
+        """Get Fills of One Order"""
+        ts = utc_timestamp()
+        return self.signed_request('GET', f'{account_group}/api/v1/order/fills/{coid}', 'order/fills', ts)
 
